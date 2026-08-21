@@ -1,0 +1,8 @@
+feature,target_user,problem_or_opportunity,framework,user_value,portfolio_impact,tech_product_depth,effort_low,stability,priority_score,confidence_label,assumptions,evidence,next_validation
+进度锚定视角对话,19-35岁深度阅读者,读不懂人物动机/作者论点导致弃书,Weighted(5 criteria),5,5,5,3,3,4.40,High,真实API能稳定复现第一人称人设,方案3.6将深度解读列为P1且为核心模块,出一版叶文洁/汪淼各5组问答验证人设贴合度
+防剧透硬隔离,全体伴读用户,AI剧透未读内容破坏体验,Weighted(5 criteria),5,4,5,3,4,4.25,High,进度锚定可简化为滑块切章,方案3.6防剧透为P0底线需求,进度切到第N章验证后续剧情不可见
+无剧透人物关系图谱,读复杂人物关系书的用户,人物线复杂记不住关系,Weighted(5 criteria),4,5,4,2,3,3.75,Medium,实体抽取+图可视化可在3天内完成,方案画像一林宇读三体记不住人物关系,先手绘静态图谱验证做动态是否值得
+划选段落实时解读,深度阅读者,跳出App查资料打断心流,Weighted(5 criteria),4,4,4,3,3,3.70,High,复用F1的API与Prompt链路,方案5.2模块二核心子功能2,划选三体1段文字验证解读口径
+枯燥内容通俗化,读理论/背景章节的用户,大段枯燥内容读不下去,Weighted(5 criteria),3,3,3,4,4,3.30,Medium,仅一个prompt变体可并入F3,方案5.2子功能2.3,可并入F3不单独立项
+阅读倦怠弱提示,有弃书风险的用户,阅读动力消失弃书,Weighted(5 criteria),3,3,2,4,4,3.10,Medium,呼吸灯/气泡纯前端低成本,方案5.2子功能3非侵入式弱提示,验证是否属于demo展示优先级
+视角化AI播客,碎片时间听书用户,现有听书音色单一无情绪,Weighted(5 criteria),3,4,4,1,2,2.95,Low,TTS音色克隆1周内不可靠,方案3.3边缘用户张萌强代入感听书诉求,判定为后续迭代不做demo

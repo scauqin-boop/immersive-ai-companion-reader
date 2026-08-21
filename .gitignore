@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 环境与密钥（绝不提交）
+backend/.env
+
+# 运行数据（导入的书，含可能受版权保护的内容）
+backend/data/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI 伴读 · 通用阅读器</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">AI 伴读 · 沉浸式阅读器</div>
+    <div class="controls">
+      <select id="bookSelect" class="book-select" title="选择书籍"></select>
+      <button id="importBtn" class="btn">导入小说</button>
+      <input type="file" id="fileInput" accept=".txt" hidden />
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- 左侧：阅读区 -->
+    <section class="reader" id="reader">
+      <div class="page-meta">
+        <span id="chapterLabel">—</span>
+        <span id="progressLabel" class="dim"></span>
+      </div>
+      <div class="page" id="pageText">
+        <p class="empty-hint">导入一部小说，或从上方选择一本书开始阅读。</p>
+      </div>
+      <div class="page-nav">
+        <button id="prevPage" class="nav-btn" title="上一页 (←)">‹ 上一页</button>
+        <span id="pageIndicator" class="dim">0 / 0</span>
+        <button id="nextPage" class="nav-btn" title="下一页 (→)">下一页 ›</button>
+      </div>
+    </section>
+
+    <!-- 右侧：伴读面板 -->
+    <aside class="companion" id="companion">
+      <div class="companion-head">
+        <span class="companion-title">视角伴读</span>
+        <span id="progressBadge" class="badge">第 0 章</span>
+      </div>
+
+      <div class="char-row" id="charList"></div>
+
+      <div class="add-char" id="addCharBox">
+        <button id="addCharBtn" class="btn btn-ghost">+ 手动添加人物</button>
+        <div class="add-char-form" id="addCharForm" hidden>
+          <input id="charName" placeholder="人物姓名" />
+          <input id="charDesc" placeholder="一句话介绍（可选）" />
+          <button id="saveCharBtn" class="btn btn-small">添加</button>
+        </div>
+      </div>
+
+      <div class="chat" id="chat">
+        <div class="chat-empty" id="chatEmpty">选中一个人物，问问 TA 此刻的想法。</div>
+      </div>
+
+      <div class="chat-input">
+        <input id="chatInput" placeholder="问问当前人物…（Enter 发送）" disabled />
+        <button id="sendBtn" class="btn btn-small" disabled>发送</button>
+      </div>
+    </aside>
+  </main>
+
+  <!-- 划选解读浮层 -->
+  <div class="interpret-pop" id="interpretPop" hidden>
+    <div class="interpret-close" id="interpretClose">×</div>
+    <div class="interpret-title">✨ 视角解读</div>
+    <div class="interpret-body" id="interpretBody">…</div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
