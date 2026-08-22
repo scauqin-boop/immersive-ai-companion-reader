@@ -1,19 +1,32 @@
 /* AI 伴读 · 通用阅读器 前端逻辑 */
 const PAGE_CHARS = 900; // 每页字符数（翻页粒度）
 
+const SETTINGS_KEY = 'ai-reader-settings';
+const PROGRESS_KEY = 'ai-reader-progress';
+
 const state = {
   book: null,        // 当前书籍完整对象
   pages: [],         // [{chapter, chapterTitle, text}]
   pageIndex: 0,
+  chapterStart: {},  // chapter index -> 该章第一页的 pageIndex（目录跳章用）
   currentCharacter: null,
 };
+
+const settings = loadSettings();
 
 const $ = (id) => document.getElementById(id);
 
 /* ---------- 初始化 ---------- */
 async function init() {
   bindEvents();
+  applySettings();
   await loadBooks();
+  // 恢复上次阅读的书籍与进度
+  const progress = loadProgressAll();
+  if (progress._last) {
+    $('bookSelect').value = progress._last;
+    loadBook(progress._last);
+  }
 }
 init();
 
@@ -36,10 +49,24 @@ function bindEvents() {
   });
   $('saveCharBtn').addEventListener('click', addCharacter);
   $('interpretClose').addEventListener('click', () => ($('interpretPop').hidden = true));
+
+  // 目录
+  $('tocBtn').addEventListener('click', openToc);
+  $('tocClose').addEventListener('click', closeToc);
+  $('tocOverlay').addEventListener('click', (e) => {
+    if (e.target === $('tocOverlay')) closeToc();
+  });
+
+  // 字号 / 主题
+  $('fontDec').addEventListener('click', () => changeFont(-1));
+  $('fontInc').addEventListener('click', () => changeFont(1));
+  $('themeBtn').addEventListener('click', toggleTheme);
+
   document.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT') return;
     if (e.key === 'ArrowLeft') flip(-1);
     if (e.key === 'ArrowRight') flip(1);
+    if (e.key === 'Escape') closeToc();
   });
   // 划选文字 → 浮出「解读」
   $('pageText').addEventListener('mouseup', onTextSelection);
@@ -88,17 +115,22 @@ async function loadBook(id) {
   state.book = book;
   state.currentCharacter = null;
   buildPages(book);
-  state.pageIndex = 0;
+  const saved = loadProgressAll()[id];
+  state.pageIndex = (typeof saved === 'number' && saved < state.pages.length) ? saved : 0;
   renderPage();
   renderCharacters();
+  renderTOC();
   resetChat();
+  saveProgress();
 }
 
 function buildPages(book) {
   const pages = [];
+  const chapterStart = {};
   book.chapters.forEach((ch) => {
     const text = ch.content.trim();
     if (!text) return;
+    chapterStart[ch.index] = pages.length;
     for (let i = 0; i < text.length; i += PAGE_CHARS) {
       pages.push({
         chapter: ch.index,
@@ -107,6 +139,7 @@ function buildPages(book) {
       });
     }
   });
+  state.chapterStart = chapterStart;
   state.pages = pages.length ? pages : [{ chapter: 0, chapterTitle: '—', text: '（无内容）' }];
 }
 
@@ -122,6 +155,7 @@ function renderPage() {
   $('progressLabel').textContent = `已读进度锚定：截止第 ${p.chapter + 1} 章`;
   $('progressBadge').textContent = `第 ${p.chapter + 1} 章`;
   renderCharacters(); // 进度变化会改变人物锁定状态
+  updateTocHighlight();
 }
 
 function flip(delta) {
@@ -129,6 +163,101 @@ function flip(delta) {
   if (next < 0 || next >= state.pages.length) return;
   state.pageIndex = next;
   renderPage();
+  saveProgress();
+}
+
+/* ---------- 阅读进度持久化 ---------- */
+function loadProgressAll() {
+  try { return JSON.parse(localStorage.getItem(PROGRESS_KEY)) || {}; }
+  catch (_) { return {}; }
+}
+
+function saveProgress() {
+  if (!state.book) return;
+  try {
+    const all = loadProgressAll();
+    all[state.book.id] = state.pageIndex;
+    all._last = state.book.id;
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify(all));
+  } catch (_) {}
+}
+
+/* ---------- 章节目录 ---------- */
+function renderTOC() {
+  const list = $('tocList');
+  list.innerHTML = '';
+  const chapters = state.book?.chapters || [];
+  const cur = currentChapter();
+  chapters.forEach((ch) => {
+    const item = document.createElement('div');
+    item.className = 'toc-item' + (ch.index === cur ? ' current' : '');
+    const idx = document.createElement('span');
+    idx.className = 'toc-idx';
+    idx.textContent = `第${ch.index + 1}章`;
+    const title = document.createElement('span');
+    title.className = 'toc-title';
+    title.textContent = ch.title;
+    item.appendChild(idx);
+    item.appendChild(title);
+    item.addEventListener('click', () => jumpToChapter(ch.index));
+    list.appendChild(item);
+  });
+  const curEl = list.querySelector('.toc-item.current');
+  if (curEl) curEl.scrollIntoView({ block: 'center' });
+}
+
+function updateTocHighlight() {
+  const cur = currentChapter();
+  $('tocList').querySelectorAll('.toc-item').forEach((el, i) => {
+    el.classList.toggle('current', i === cur);
+  });
+}
+
+function jumpToChapter(index) {
+  const start = state.chapterStart[index];
+  if (typeof start !== 'number') return;
+  state.pageIndex = start;
+  renderPage();
+  saveProgress();
+  closeToc();
+}
+
+function openToc() {
+  $('tocOverlay').hidden = false;
+  renderTOC();
+}
+
+function closeToc() {
+  $('tocOverlay').hidden = true;
+}
+
+/* ---------- 字号 / 主题 ---------- */
+function loadSettings() {
+  try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || { fontSize: 17, theme: 'light' }; }
+  catch (_) { return { fontSize: 17, theme: 'light' }; }
+}
+
+function saveSettings() {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (_) {}
+}
+
+function applySettings() {
+  document.documentElement.style.setProperty('--reader-font-size', settings.fontSize + 'px');
+  document.body.dataset.theme = settings.theme;
+  $('themeBtn').textContent = settings.theme === 'dark' ? '日间' : '夜间';
+  $('fontSizeLabel').textContent = settings.fontSize;
+}
+
+function changeFont(delta) {
+  settings.fontSize = Math.min(24, Math.max(14, settings.fontSize + delta));
+  saveSettings();
+  applySettings();
+}
+
+function toggleTheme() {
+  settings.theme = settings.theme === 'dark' ? 'light' : 'dark';
+  saveSettings();
+  applySettings();
 }
 
 /* ---------- 人物 ---------- */

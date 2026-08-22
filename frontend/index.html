@@ -11,6 +11,13 @@
     <div class="brand">AI 伴读 · 沉浸式阅读器</div>
     <div class="controls">
       <select id="bookSelect" class="book-select" title="选择书籍"></select>
+      <button id="tocBtn" class="btn btn-ghost">目录</button>
+      <div class="font-ctl">
+        <button id="fontDec" class="btn btn-ghost btn-small" title="减小字号">A−</button>
+        <span id="fontSizeLabel" class="font-label">17</span>
+        <button id="fontInc" class="btn btn-ghost btn-small" title="增大字号">A+</button>
+      </div>
+      <button id="themeBtn" class="btn btn-ghost">夜间</button>
       <button id="importBtn" class="btn">导入小说</button>
       <input type="file" id="fileInput" accept=".txt,.epub" hidden />
     </div>
@@ -61,6 +68,17 @@
       </div>
     </aside>
   </main>
+
+  <!-- 章节目录 -->
+  <div class="toc-overlay" id="tocOverlay" hidden>
+    <div class="toc-panel">
+      <div class="toc-head">
+        <span>目录</span>
+        <span class="toc-close" id="tocClose">×</span>
+      </div>
+      <div class="toc-list" id="tocList"></div>
+    </div>
+  </div>
 
   <!-- 划选解读浮层 -->
   <div class="interpret-pop" id="interpretPop" hidden>
