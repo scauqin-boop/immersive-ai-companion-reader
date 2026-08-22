@@ -84,6 +84,22 @@ def test_chat(book):
     print(f"[OK] 对话(进度0, {'真实' if r.json()['ok'] else 'mock兜底'}) -> {r.json()['reply'][:40]}…")
 
 
+def test_multi_turn(book):
+    r = client.post("/api/chat", json={
+        "book_id": book["id"],
+        "character": "林晚",
+        "progress_chapter": 0,
+        "message": "那后来呢？",
+        "history": [
+            {"role": "user", "content": "你现在在想什么？"},
+            {"role": "assistant", "content": "我正站在渡口，看着雾一点点漫上来。"},
+        ],
+    })
+    assert r.status_code == 200, r.text
+    assert r.json()["reply"], "多轮对话应返回回复"
+    print(f"[OK] 同进度多轮对话(带 history) -> {r.json()['reply'][:40]}…")
+
+
 def test_interpret(book):
     r = client.post("/api/interpret", json={
         "book_id": book["id"],
@@ -100,5 +116,6 @@ if __name__ == "__main__":
     test_epub_parser()
     book = test_import()
     test_chat(book)
+    test_multi_turn(book)
     test_interpret(book)
     print("\n[OK] 全部冒烟测试通过")

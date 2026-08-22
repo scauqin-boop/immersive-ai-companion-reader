@@ -29,6 +29,7 @@ class ChatRequest(BaseModel):
     character: str
     progress_chapter: int
     message: str
+    history: list = []  # 同进度内的多轮历史 [{role, content}]，换章/换人物时由前端清空
 
 
 class InterpretRequest(BaseModel):
@@ -95,7 +96,7 @@ async def chat(req: ChatRequest):
     system = prompt.build_system_prompt(
         book["title"], req.character, desc, req.progress_chapter, context
     )
-    ok, reply = await llm.chat_deepseek(system, req.message)
+    ok, reply = await llm.chat_deepseek(system, req.message, history=req.history)
     return {"reply": reply, "ok": ok, "progress_chapter": req.progress_chapter}
 
 

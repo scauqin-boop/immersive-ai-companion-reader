@@ -21,11 +21,23 @@ _MOCK = [
 ]
 
 
-async def chat_deepseek(system: str, user: str, api_key: str = None) -> tuple:
-    """返回 (ok: bool, reply: str)。ok=False 表示走的是 mock 兜底。"""
+async def chat_deepseek(system: str, user: str, history: list = None, api_key: str = None) -> tuple:
+    """返回 (ok: bool, reply: str)。ok=False 表示走的是 mock 兜底。
+
+    history: 同进度内的多轮历史 [{role: 'user'|'assistant', content: str}]，
+    按序拼在 system 与当前 user 之间；为空则退化为单轮。
+    注意：history 只可能是同一进度锚点下的对话，由前端在换章/换人物时清空，故不破坏防剧透。
+    """
     key = api_key or API_KEY
     if not key:
         return False, _mock_reply()
+
+    messages = [{"role": "system", "content": system}]
+    for m in history or []:
+        role, content = m.get("role"), m.get("content", "")
+        if role in ("user", "assistant") and content:
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": user})
 
     try:
         async with httpx.AsyncClient(timeout=60) as client:
@@ -37,10 +49,7 @@ async def chat_deepseek(system: str, user: str, api_key: str = None) -> tuple:
                 },
                 json={
                     "model": MODEL,
-                    "messages": [
-                        {"role": "system", "content": system},
-                        {"role": "user", "content": user},
-                    ],
+                    "messages": messages,
                     "temperature": 0.7,
                     "max_tokens": 300,
                 },

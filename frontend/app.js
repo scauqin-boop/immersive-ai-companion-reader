@@ -10,6 +10,8 @@ const state = {
   pageIndex: 0,
   chapterStart: {},  // chapter index -> 该章第一页的 pageIndex（目录跳章用）
   currentCharacter: null,
+  history: [],       // 同进度多轮历史 [{role, content}]，换章/换人物即清空
+  anchorChapter: null, // 当前对话锚定的章节（跨章/换人物即重置，防剧透）
 };
 
 const settings = loadSettings();
@@ -114,6 +116,8 @@ async function loadBook(id) {
   const book = await fetchJSON('/api/books/' + id);
   state.book = book;
   state.currentCharacter = null;
+  state.history = [];
+  state.anchorChapter = null;
   buildPages(book);
   const saved = loadProgressAll()[id];
   state.pageIndex = (typeof saved === 'number' && saved < state.pages.length) ? saved : 0;
@@ -161,9 +165,20 @@ function renderPage() {
 function flip(delta) {
   const next = state.pageIndex + delta;
   if (next < 0 || next >= state.pages.length) return;
+  const oldChapter = currentChapter();
   state.pageIndex = next;
+  if (currentChapter() !== oldChapter) {
+    resetConversation(); // 进度锚点变化 → 清空历史，跨章不继承记忆（防剧透）
+  }
   renderPage();
   saveProgress();
+}
+
+/* 重置当前对话：清空历史并重新锚定到当前章节 */
+function resetConversation() {
+  state.history = [];
+  state.anchorChapter = currentChapter();
+  resetChat();
 }
 
 /* ---------- 阅读进度持久化 ---------- */
@@ -292,8 +307,8 @@ function renderCharacters() {
 
 function selectCharacter(name) {
   state.currentCharacter = name;
+  resetConversation();
   renderCharacters();
-  resetChat();
 }
 
 async function addCharacter() {
@@ -318,20 +333,27 @@ function resetChat() {
   const empty = document.createElement('div');
   empty.className = 'chat-empty';
   empty.id = 'chatEmpty';
-  empty.textContent = '选中一个人物，问问 TA 此刻的想法。';
+  empty.textContent = state.currentCharacter
+    ? `和 ${state.currentCharacter} 聊聊 TA 此刻的想法吧。`
+    : '选中一个人物，问问 TA 此刻的想法。';
   $('chat').appendChild(empty);
 }
+
+const MAX_HISTORY = 8; // 最多保留最近 8 条消息（4 轮问答），避免历史无限增长
 
 async function sendChat() {
   const input = $('chatInput');
   const message = input.value.trim();
   if (!message || !state.currentCharacter || !state.book) return;
 
+  const chapter = currentChapter();
+  if (chapter !== state.anchorChapter) resetConversation(); // 兜底：锚点变化则重开
+
   input.value = '';
   appendMessage('user', message, '你');
-  const chapter = currentChapter();
   appendMessage('ai', '…', state.currentCharacter, true);
 
+  const history = state.history.slice(); // 发送前快照（不含本条）
   try {
     const data = await fetchJSON('/api/chat', {
       method: 'POST',
@@ -341,9 +363,15 @@ async function sendChat() {
         character: state.currentCharacter,
         progress_chapter: chapter,
         message,
+        history,
       }),
     });
     replaceLastAi(data.reply, state.currentCharacter, data.ok);
+    state.history.push({ role: 'user', content: message });
+    state.history.push({ role: 'assistant', content: data.reply });
+    if (state.history.length > MAX_HISTORY) {
+      state.history = state.history.slice(-MAX_HISTORY);
+    }
   } catch (err) {
     replaceLastAi('出错了：' + err.message, state.currentCharacter, false);
   }
