@@ -1,11 +1,16 @@
-"""冒烟测试：不依赖外部 API key，验证 导入 → 分章 → 防剧透 → 对话/解读 全链路。
+"""冒烟测试：不依赖外部 API key，验证 导入(txt/epub) → 分章 → 防剧透 → 对话/解读 全链路。
 
 运行：cd backend && python smoke_test.py
 """
+import asyncio
+import io
+import zipfile
+
 from fastapi.testclient import TestClient
 
 import anti_spoiler
 import book_parser
+import epub_parser
 import main
 
 client = TestClient(main.app)
@@ -17,13 +22,44 @@ def test_anti_spoiler():
         chapters = book_parser.split_chapters(f.read())
     assert len(chapters) == 3, f"期望 3 章，实际 {len(chapters)}"
 
-    ctx0 = anti_spoiler.build_context(chapters, 0)  # 只读到第 1 章
+    book = {"id": "t", "title": "雾港", "chapters": chapters, "characters": [], "summary": None}
+    ctx0 = asyncio.run(anti_spoiler.build_context(book, 0, "苏辰是谁"))  # 只读到第 1 章
     assert "苏辰" not in ctx0, "防剧透失败：进度=0 时泄露了第 2 章人物"
     assert "暗潮" not in ctx0, "防剧透失败：进度=0 时泄露了第 3 章内容"
 
-    ctx2 = anti_spoiler.build_context(chapters, 2)  # 读到第 3 章
+    ctx2 = asyncio.run(anti_spoiler.build_context(book, 2, "暗潮是什么"))  # 读到第 3 章
     assert "苏辰" in ctx2 and "暗潮" in ctx2, "进度=2 应包含全部已读内容"
     print("[OK] 防剧透硬隔离：进度=0 只含第1章，进度=2 含全部3章")
+
+
+def test_epub_parser():
+    # 构造一个最小 epub，验证 spine 解析 + HTML 去标签
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("mimetype", "application/epub+zip")
+        z.writestr(
+            "META-INF/container.xml",
+            '<?xml version="1.0"?><container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">'
+            '<rootfiles><rootfile full-path="content.opf" '
+            'media-type="application/oebps-package+xml"/></rootfiles></container>',
+        )
+        z.writestr(
+            "content.opf",
+            '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf">'
+            '<metadata><dc:title xmlns:dc="http://purl.org/dc/elements/1.1/">测试书</dc:title></metadata>'
+            '<manifest><item id="c1" href="c1.xhtml" media-type="application/xhtml+xml"/></manifest>'
+            '<spine><itemref idref="c1"/></spine></package>',
+        )
+        z.writestr(
+            "c1.xhtml",
+            "<html><body><h1>第一章</h1><p>这是一个测试段落，包含人物 苏辰。</p></body></html>",
+        )
+
+    title, chapters = epub_parser.parse_epub(buf.getvalue())
+    assert title == "测试书", title
+    assert len(chapters) == 1, chapters
+    assert "苏辰" in chapters[0]["content"], chapters[0]["content"]
+    print(f"[OK] EPUB 解析 -> 《{title}》{len(chapters)}章（含 苏辰）")
 
 
 def test_import():
@@ -61,7 +97,8 @@ def test_interpret(book):
 
 if __name__ == "__main__":
     test_anti_spoiler()
+    test_epub_parser()
     book = test_import()
     test_chat(book)
     test_interpret(book)
-    print("\n✅ 全部冒烟测试通过")
+    print("\n[OK] 全部冒烟测试通过")

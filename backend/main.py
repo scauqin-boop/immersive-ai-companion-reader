@@ -57,12 +57,10 @@ def list_books():
 @app.post("/api/books/import")
 async def import_book(file: UploadFile = File(...)):
     raw = await file.read()
-    text = _decode(raw)
-    chapters = book_parser.split_chapters(text)
+    title, chapters = book_parser.parse_document(file.filename, raw)
     if not chapters:
-        raise HTTPException(400, "未解析出内容，请确认是 txt 文本文件")
+        raise HTTPException(400, "未解析出内容，请确认是 txt 或 epub 文件")
 
-    title = os.path.splitext(file.filename or "未命名")[0]
     head_text = "".join(c["content"][:2000] for c in chapters[:2])
     characters = await character_extract.extract_characters(head_text)
 
@@ -93,7 +91,7 @@ async def chat(req: ChatRequest):
     character = next((c for c in book["characters"] if c["name"] == req.character), None)
     desc = character["description"] if character else ""
 
-    context = anti_spoiler.build_context(book["chapters"], req.progress_chapter)
+    context = await anti_spoiler.build_context(book, req.progress_chapter, req.message)
     system = prompt.build_system_prompt(
         book["title"], req.character, desc, req.progress_chapter, context
     )
@@ -104,19 +102,10 @@ async def chat(req: ChatRequest):
 @app.post("/api/interpret")
 async def interpret(req: InterpretRequest):
     book = store.load_book(req.book_id)
-    context = anti_spoiler.build_context(book["chapters"], req.progress_chapter)
+    context = await anti_spoiler.build_context(book, req.progress_chapter, req.text)
     system = prompt.build_system_prompt(
         book["title"], req.character, "", req.progress_chapter, context
     )
     user = f"请以第一人称，解读下面这段话里人物的心理与动机（不剧透后续）：\n{req.text}"
     ok, reply = await llm.chat_deepseek(system, user)
     return {"reply": reply, "ok": ok}
-
-
-def _decode(raw: bytes) -> str:
-    for enc in ("utf-8", "gb18030", "utf-16"):
-        try:
-            return raw.decode(enc)
-        except UnicodeDecodeError:
-            continue
-    return raw.decode("utf-8", errors="ignore")

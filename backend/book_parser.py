@@ -1,53 +1,61 @@
-"""文本导入与分章解析。
+"""文本导入解析：txt（编码识别 + 章节切分）/ epub（spine 抽取）。
 
-支持 txt 导入，自动识别编码，按章节标记切分，兜底按段落切块。
+统一入口 parse_document()，根据扩展名分发；返回 (title, chapters)。
 """
+import os
 import re
 
-# 中文「第X章/回/卷/节」与英文「Chapter N」
+import epub_parser
+
 _CHAPTER_RE = re.compile(
     r"(第[零一二三四五六七八九十百千万0-9]+[章回卷节])|(Chapter\s+\d+)",
     re.IGNORECASE,
 )
 
-_FALLBACK_CHUNK = 3000  # 兜底切块时每块字符数
+_FALLBACK_CHUNK_CHARS = 3000
+
+
+def decode(raw: bytes) -> str:
+    """按常见中文编码依次尝试解码，兜底忽略非法字节。"""
+    for enc in ("utf-8", "gb18030", "utf-16"):
+        try:
+            return raw.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("utf-8", errors="ignore")
 
 
 def split_chapters(text: str) -> list:
-    """把整本书文本切成章节列表，返回 [{index, title, content}]。"""
+    """按章节正则切分，匹配不到时退化为固定长度分块。返回 [{index, title, content}]。"""
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     matches = list(_CHAPTER_RE.finditer(text))
+    if not matches:
+        return _fallback_split(text)
 
-    if len(matches) >= 1:
-        raw = []  # [(title, content)]
-        if matches[0].start() > 0 and text[: matches[0].start()].strip():
-            raw.append(("开篇", text[: matches[0].start()].strip()))
-        for i, m in enumerate(matches):
-            start = m.start()
-            end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
-            seg = text[start:end].strip()
-            title = seg.split("\n")[0].strip()[:40] or f"第{i + 1}章"
-            raw.append((title, seg))
-    else:
-        raw = _fallback_split(text)
-
-    return [
-        {"index": i, "title": title, "content": content}
-        for i, (title, content) in enumerate(raw)
-        if content.strip()
-    ]
+    chapters = []
+    for i, m in enumerate(matches):
+        title = m.group(0).strip()
+        start = m.end()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+        content = text[start:end].strip()
+        if content:
+            chapters.append({"index": len(chapters), "title": title, "content": content})
+    return chapters
 
 
 def _fallback_split(text: str) -> list:
-    """无章节标记时，按段落边界凑成 ~3000 字一块。"""
-    paras = text.split("\n\n")
-    raw, chunk, idx = [], "", 0
-    for p in paras:
-        if len(chunk) + len(p) > _FALLBACK_CHUNK and chunk:
-            raw.append((f"第{idx + 1}部分", chunk))
-            idx += 1
-            chunk = ""
-        chunk += p + "\n\n"
-    if chunk.strip():
-        raw.append((f"第{idx + 1}部分", chunk))
-    return raw
+    chunks = [text[i : i + _FALLBACK_CHUNK_CHARS] for i in range(0, len(text), _FALLBACK_CHUNK_CHARS)]
+    return [
+        {"index": i, "title": f"第{i + 1}节", "content": c.strip()}
+        for i, c in enumerate(chunks)
+        if c.strip()
+    ]
+
+
+def parse_document(filename: str, raw: bytes) -> tuple:
+    """统一导入入口：epub 走 spine 解析，其余按 txt 处理。返回 (title, chapters)。"""
+    ext = os.path.splitext(filename or "")[1].lower()
+    if ext == ".epub":
+        return epub_parser.parse_epub(raw)
+    title = os.path.splitext(filename or "未命名")[0]
+    return title, split_chapters(decode(raw))
